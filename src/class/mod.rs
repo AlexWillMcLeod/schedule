@@ -32,4 +32,14 @@ impl Class {
       Ok(())
     }
   }
+  pub fn is_full(&self) -> bool {
+    self.student_list.len()
+      < self
+        .department
+        .upgrade()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .class_size
+  }
 }
