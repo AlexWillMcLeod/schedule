@@ -1,4 +1,4 @@
-use crate::{department::*, prelude::*, subject::*};
+use crate::{prelude::*, Subject};
 use std::sync::Weak;
 
 #[derive(Default)]
@@ -71,34 +71,35 @@ impl StudentBuilder {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::{Department, SubjectBuilder};
   use std::sync::Arc;
 
   #[test]
   #[should_panic]
   fn create_student_missing_all_fields() {
     let student_builder = StudentBuilder::new();
-    let student = student_builder.build().unwrap();
+    let _student = student_builder.build().unwrap();
   }
 
   #[test]
   #[should_panic]
   fn create_student_missing_name() {
     let student_builder = StudentBuilder::new().id("123");
-    let student = student_builder.build().unwrap();
+    let _student = student_builder.build().unwrap();
   }
 
   #[test]
   #[should_panic]
   fn create_student_missing_id() {
     let student_builder = StudentBuilder::new().first_name("Person").last_name("One");
-    let student = student_builder.build().unwrap();
+    let _student = student_builder.build().unwrap();
   }
 
   #[test]
   #[should_panic]
   fn create_student_only_last_name() {
     let student_builder = StudentBuilder::new().last_name("One");
-    let student = student_builder.build().unwrap();
+    let _student = student_builder.build().unwrap();
   }
 
   #[test]
@@ -107,7 +108,8 @@ mod tests {
     let maths_department = Arc::new(Department {
       name: "Maths Department".to_string(),
       class_count: 10,
-      class_size: 10,
+      min_class_size: 10,
+      max_class_size: 15,
     });
 
     let calculus_subject = Arc::new(
@@ -121,7 +123,7 @@ mod tests {
     let student_builder = StudentBuilder::new()
       .last_name("One")
       .subject(Arc::downgrade(&calculus_subject));
-    let student = student_builder.build().unwrap();
+    let _student = student_builder.build().unwrap();
   }
 
   #[test]
@@ -130,7 +132,7 @@ mod tests {
       .first_name("Person")
       .last_name("One")
       .id("123");
-    let student = student_builder.build().unwrap();
+    let _student = student_builder.build().unwrap();
   }
 
   #[test]
@@ -138,7 +140,8 @@ mod tests {
     let maths_department = Arc::new(Department {
       name: "Maths Department".to_string(),
       class_count: 10,
-      class_size: 10,
+      min_class_size: 10,
+      max_class_size: 15,
     });
 
     let calculus_subject = Arc::new(

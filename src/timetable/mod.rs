@@ -4,14 +4,10 @@ mod slot;
 use std::sync::{Arc, Mutex, Weak};
 
 use crate::{prelude::*, Student, Subject};
-use class::Class;
-use slot::Slot;
+pub use class::Class;
+pub use slot::Slot;
 
-pub struct Period {
-  id: String,
-}
-
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Timetable {
   pub slot_list: Vec<Arc<Mutex<Slot>>>,
 }
@@ -31,18 +27,20 @@ impl Timetable {
   pub fn clear(&mut self) {
     *self = Self::new(self.slot_list.capacity());
   }
-  pub fn add_student_to_timetable(&mut self, student: Weak<Student>) {
+  // TODO! Returns the number of subjects that a student could not join
+  pub fn add_student_to_timetable(&mut self, student: Weak<Student>) -> Result<usize> {
     let mut student_subjects = student.upgrade().unwrap().subject_list.clone();
     loop {
       let Ok(subject_added) =
       self.add_student_to_least_available(Weak::clone(&student), &student_subjects) else {
-        return;
+        return Ok(student_subjects.len())
       };
-      let subject_index = student_subjects
-        .iter()
-        .position(|x| subject_added.ptr_eq(x))
-        .unwrap();
-      student_subjects.remove(subject_index);
+      student_subjects.remove(
+        student_subjects
+          .iter()
+          .position(|x| subject_added.ptr_eq(x))
+          .unwrap(),
+      );
     }
   }
 
@@ -58,9 +56,12 @@ impl Timetable {
     }
 
     // Check that some subjects are available
-    let Some(available_subject) = self.get_available_subject(Weak::clone(&student)) else {
+    let Some(available_subject) = self.get_available_subject(Weak::clone(&student), &subject_list) else {
       // If none are available add an arbitrary one
-      self.add_student_to_subject(student, Weak::clone(&subject_list.get(0).unwrap())).unwrap();
+      match self.add_student_to_subject(student, Weak::clone(&subject_list.get(0).unwrap())) {
+        Ok(..) => {},
+        Err(k) => return Err(k)
+      }
       return Ok(Weak::clone(&subject_list.get(0).unwrap()));
     };
 
@@ -89,9 +90,12 @@ impl Timetable {
     Ok(least_available_subject)
   }
 
-  pub fn get_available_subject(&self, student: Weak<Student>) -> Option<Weak<Subject>> {
-    let student_subjects = &student.upgrade().unwrap().subject_list;
-    for subject in student_subjects {
+  pub fn get_available_subject(
+    &self,
+    student: Weak<Student>,
+    subject_list: &Vec<Weak<Subject>>,
+  ) -> Option<Weak<Subject>> {
+    for subject in subject_list {
       if self.available_slots(Weak::clone(&student), Weak::clone(&subject)) != 0 {
         return Some(Weak::clone(subject));
       }
@@ -128,15 +132,17 @@ impl Timetable {
     student: Weak<Student>,
     subject: Weak<Subject>,
   ) -> Result<()> {
-    self
-      .get_student_free_slots(Weak::clone(&student))
-      .get(0)
-      .unwrap()
-      .upgrade()
-      .unwrap()
-      .lock()
-      .unwrap()
-      .create_class_for_student(student, subject)
+    match self.get_student_free_slots(Weak::clone(&student)).get(0) {
+      Some(slot) => slot
+        .upgrade()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .create_class_for_student(student, subject),
+      None => Err(Error::Generic(
+        "Student has no free slots available".to_string(),
+      )),
+    }
   }
 
   pub fn get_student_free_slots(&self, student: Weak<Student>) -> Vec<Weak<Mutex<Slot>>> {

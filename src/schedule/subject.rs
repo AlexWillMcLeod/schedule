@@ -1,7 +1,7 @@
 use crate::{department::*, prelude::*};
 use std::sync::Weak;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SubjectBuilder {
   name: Option<String>,
   department_list: Vec<Weak<Department>>,
@@ -58,7 +58,7 @@ mod tests {
   #[should_panic]
   fn create_subject_missing_all_fields() {
     let subject_builder = SubjectBuilder::new();
-    let subject = subject_builder.build().unwrap();
+    let _subject = subject_builder.build().unwrap();
   }
 
   #[test]
@@ -66,26 +66,28 @@ mod tests {
   fn create_subject_missing_name() {
     let maths_department = Arc::new(Department {
       name: "Maths Department".to_string(),
-      class_size: 30,
+      min_class_size: 20,
+      max_class_size: 30,
       class_count: 20,
     });
 
     let subject_builder = SubjectBuilder::new().department(Arc::downgrade(&maths_department));
-    let subject = subject_builder.build().unwrap();
+    let _subject = subject_builder.build().unwrap();
   }
 
   #[test]
   #[should_panic]
   fn create_subject_missing_department() {
     let subject_builder = SubjectBuilder::new().name("Calculus");
-    let subject = subject_builder.build().unwrap();
+    let _subject = subject_builder.build().unwrap();
   }
 
   #[test]
   fn create_subject() {
     let maths_department = Arc::new(Department {
       name: "Maths Department".to_string(),
-      class_size: 30,
+      min_class_size: 20,
+      max_class_size: 30,
       class_count: 20,
     });
 

@@ -1,4 +1,5 @@
 pub mod department;
+pub mod random;
 pub mod student;
 pub mod subject;
 
@@ -8,14 +9,14 @@ pub use department::Department;
 pub use student::{Student, StudentBuilder};
 pub use subject::{Subject, SubjectBuilder};
 
-use crate::{prelude::*, timetable::Timetable};
+use crate::{prelude::*, timetable::Timetable, Class};
 use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Schedule {
-  student_list: Vec<Arc<Student>>,
-  subject_list: Vec<Arc<Subject>>,
-  department_list: Vec<Arc<Department>>,
+  pub student_list: Vec<Arc<Student>>,
+  pub subject_list: Vec<Arc<Subject>>,
+  pub department_list: Vec<Arc<Department>>,
   pub timetable: Timetable,
 }
 
@@ -52,12 +53,14 @@ impl Schedule {
   pub fn new_department(
     &mut self,
     name: impl Into<String>,
-    class_size: usize,
+    min_class_size: usize,
+    max_class_size: usize,
     class_count: usize,
   ) -> Result<()> {
     self.add_department(Department {
       name: name.into(),
-      class_size,
+      min_class_size,
+      max_class_size,
       class_count,
     })
   }
@@ -195,11 +198,23 @@ impl Schedule {
   }
 
   pub fn sort(&mut self) -> Result<()> {
+    self.timetable.clear();
+
     for student in &self.student_list {
       self
         .timetable
-        .add_student_to_timetable(Arc::downgrade(&student));
+        .add_student_to_timetable(Arc::downgrade(&student))
+        .unwrap();
     }
+
+    // Remove classes with insufficient class size
+    self.timetable.slot_list.iter_mut().for_each(|slot| {
+      slot
+        .lock()
+        .unwrap()
+        .remove_small_classes_and_get_displaced_students();
+    });
+
     Ok(())
   }
 }
@@ -215,18 +230,20 @@ mod tests {
     let mut high_school = Schedule::new();
 
     high_school
-      .new_department("Maths Department", 25, 10)
+      .new_department("Maths Department", 25, 30, 10)
       .unwrap();
     high_school
-      .new_department("English Department", 30, 10)
+      .new_department("English Department", 30, 35, 10)
       .unwrap();
     high_school
-      .new_department("Science Department", 30, 15)
+      .new_department("Science Department", 30, 35, 15)
       .unwrap();
     high_school
-      .new_department("Social Science Department", 30, 10)
+      .new_department("Social Science Department", 30, 35, 10)
       .unwrap();
-    high_school.new_department("IT Department", 30, 20).unwrap();
+    high_school
+      .new_department("IT Department", 30, 35, 20)
+      .unwrap();
 
     let department_list: Vec<Department> = high_school
       .department_list
@@ -239,27 +256,32 @@ mod tests {
       vec![
         Department {
           name: "Maths Department".to_string(),
-          class_size: 25,
+          min_class_size: 25,
+          max_class_size: 30,
           class_count: 10
         },
         Department {
           name: "English Department".to_string(),
-          class_size: 30,
+          min_class_size: 30,
+          max_class_size: 35,
           class_count: 10
         },
         Department {
           name: "Science Department".to_string(),
-          class_size: 30,
+          min_class_size: 30,
+          max_class_size: 35,
           class_count: 15
         },
         Department {
           name: "Social Science Department".to_string(),
-          class_size: 30,
+          min_class_size: 30,
+          max_class_size: 35,
           class_count: 10
         },
         Department {
           name: "IT Department".to_string(),
-          class_size: 30,
+          min_class_size: 30,
+          max_class_size: 35,
           class_count: 20
         }
       ]
@@ -271,13 +293,13 @@ mod tests {
     let mut high_school = Schedule::new();
 
     high_school
-      .new_department("Computer Science Department", 25, 10)
+      .new_department("Computer Science Department", 25, 30, 10)
       .unwrap();
     high_school
-      .new_department("Maths Department", 30, 5)
+      .new_department("Maths Department", 30, 35, 5)
       .unwrap();
     high_school
-      .new_department("Science Department", 15, 8)
+      .new_department("Science Department", 15, 20, 8)
       .unwrap();
 
     let maths_department = high_school
@@ -290,7 +312,8 @@ mod tests {
       maths_department,
       Department {
         name: "Maths Department".to_string(),
-        class_size: 30,
+        min_class_size: 30,
+        max_class_size: 35,
         class_count: 5
       }
     );
@@ -300,7 +323,7 @@ mod tests {
   fn new_subject() {
     let mut high_school = Schedule::new();
     high_school
-      .new_department("Maths Department", 30, 10)
+      .new_department("Maths Department", 30, 35, 10)
       .unwrap();
     high_school
       .new_subject("Maths", vec!["Maths Department"])
@@ -322,7 +345,8 @@ mod tests {
       department,
       Department {
         name: "Maths Department".to_string(),
-        class_size: 30,
+        min_class_size: 30,
+        max_class_size: 35,
         class_count: 10
       }
     );
@@ -333,7 +357,7 @@ mod tests {
   fn new_subject_wrong_assertion() {
     let mut high_school = Schedule::new();
     high_school
-      .new_department("Maths Department", 30, 10)
+      .new_department("Maths Department", 30, 35, 10)
       .unwrap();
     high_school
       .new_subject("Maths", vec!["Maths Department"])
@@ -355,7 +379,8 @@ mod tests {
       department,
       Department {
         name: "Maths Department".to_string(),
-        class_size: 30,
+        min_class_size: 30,
+        max_class_size: 35,
         class_count: 25
       }
     );
@@ -366,14 +391,14 @@ mod tests {
     let mut high_school = Schedule::new();
 
     high_school
-      .new_department("Maths Department", 30, 10)
+      .new_department("Maths Department", 30, 35, 10)
       .unwrap();
 
     high_school
       .new_subject("Calculus", vec!["Maths Department"])
       .unwrap();
 
-    let calculus = high_school.get_subject("Calculus").unwrap();
+    let _calculus = high_school.get_subject("Calculus").unwrap();
   }
 
   #[test]
@@ -381,7 +406,7 @@ mod tests {
     let mut high_school = Schedule::new();
 
     high_school
-      .new_department("Computer Science Department", 30, 10)
+      .new_department("Computer Science Department", 30, 35, 10)
       .unwrap();
 
     high_school
@@ -398,7 +423,7 @@ mod tests {
     let mut high_school = Schedule::new();
 
     high_school
-      .new_department("Computer Science Department", 30, 10)
+      .new_department("Computer Science Department", 30, 35, 10)
       .unwrap();
 
     high_school
@@ -426,8 +451,8 @@ mod tests {
   fn new_department_same_name() {
     let mut high_school = Schedule::new();
 
-    high_school.new_department("Math", 30, 10).unwrap();
-    high_school.new_department("Math", 30, 10).unwrap();
+    high_school.new_department("Math", 30, 35, 10).unwrap();
+    high_school.new_department("Math", 30, 35, 10).unwrap();
   }
 
   #[test]
@@ -435,7 +460,7 @@ mod tests {
   fn new_subject_same_name() {
     let mut high_school = Schedule::new();
 
-    high_school.new_department("Math", 30, 10).unwrap();
+    high_school.new_department("Math", 30, 35, 10).unwrap();
 
     high_school.new_subject("Calculus", vec!["Math"]).unwrap();
     high_school.new_subject("Calculus", vec!["Math"]).unwrap();
@@ -446,7 +471,7 @@ mod tests {
   fn new_student_same_id() {
     let mut high_school = Schedule::new();
 
-    high_school.new_department("Math", 30, 10).unwrap();
+    high_school.new_department("Math", 30, 35, 10).unwrap();
 
     high_school.new_subject("Calculus", vec!["Math"]).unwrap();
 

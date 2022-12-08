@@ -1,9 +1,9 @@
-use crate::{prelude::*, subject, timetable::Class, Department, Student, Subject};
-use std::sync::{Arc, Mutex, Weak};
+use crate::{prelude::*, timetable::Class, Department, Student, Subject};
+use std::sync::Weak;
 
 #[derive(Default, Debug)]
 pub struct Slot {
-  pub class_list: Vec<Arc<Mutex<Class>>>,
+  pub class_list: Vec<Class>,
 }
 
 impl Slot {
@@ -12,7 +12,7 @@ impl Slot {
   }
   pub fn contains_student(&self, student: Weak<Student>) -> bool {
     for class in &self.class_list {
-      if class.lock().unwrap().contains(Weak::clone(&student)) {
+      if class.contains(Weak::clone(&student)) {
         return true;
       }
     }
@@ -20,7 +20,7 @@ impl Slot {
   }
   pub fn contains_subject(&self, subject: Weak<Subject>) -> bool {
     for class in &self.class_list {
-      if class.lock().unwrap().subject.ptr_eq(&subject) {
+      if class.subject.ptr_eq(&subject) {
         return true;
       }
     }
@@ -28,12 +28,11 @@ impl Slot {
   }
   pub fn contains_joinable_subject(&self, subject: Weak<Subject>) -> bool {
     for class in &self.class_list {
-      let class = class.lock().unwrap();
       if !class.subject.ptr_eq(&subject) {
         continue;
       }
-      let class_size = class.department.upgrade().unwrap().class_size;
-      if class.student_list.len() >= class_size {
+      let max_class_size = class.department.upgrade().unwrap().max_class_size;
+      if class.student_list.len() >= max_class_size {
         continue;
       }
       return true;
@@ -41,18 +40,25 @@ impl Slot {
     false
   }
 
+  pub fn remove_small_classes_and_get_displaced_students(&mut self) -> usize {
+    self
+      .class_list
+      .iter_mut()
+      .map(|x| x.remove_if_too_small())
+      .sum::<usize>()
+  }
+
   pub fn add_student_to_subject(
     &mut self,
     student: Weak<Student>,
     subject: Weak<Subject>,
   ) -> Result<()> {
-    for class in &self.class_list {
-      let mut class = class.lock().unwrap();
+    for class in &mut self.class_list {
       if !class.subject.ptr_eq(&subject) {
         continue;
       }
-      let class_size = class.department.upgrade().unwrap().class_size;
-      if class.student_list.len() >= class_size {
+      let max_class_size = class.department.upgrade().unwrap().max_class_size;
+      if class.student_list.len() >= max_class_size {
         continue;
       }
       class.student_list.push(Weak::clone(&student));
@@ -68,7 +74,7 @@ impl Slot {
     let mut curr_class_count = 0;
 
     for class in &self.class_list {
-      if class.lock().unwrap().department.ptr_eq(&department) {
+      if class.department.ptr_eq(&department) {
         curr_class_count += 1;
       }
     }
@@ -90,8 +96,9 @@ impl Slot {
         subject: Weak::clone(&subject),
         department,
         student_list: vec![Weak::clone(&student)],
+        removed: false,
       };
-      self.class_list.push(Arc::new(Mutex::new(new_class)));
+      self.class_list.push(new_class);
       return Ok(());
     }
     Err(Error::Generic("No classrooms left for subject".to_string()))
@@ -103,18 +110,21 @@ mod tests {
   use super::*;
   use crate::StudentBuilder;
   use crate::SubjectBuilder;
+  use std::sync::Arc;
 
   #[test]
   fn test_is_department_full() {
     let department_one = Arc::new(Department {
       name: "Maths".to_string(),
       class_count: 30,
-      class_size: 30,
+      min_class_size: 30,
+      max_class_size: 35,
     });
     let department_two = Arc::new(Department {
       name: "English".to_string(),
       class_count: 0,
-      class_size: 30,
+      min_class_size: 30,
+      max_class_size: 30,
     });
     let slot = Slot::new();
     assert!(!slot.is_department_full(Arc::downgrade(&department_one)));
@@ -126,7 +136,8 @@ mod tests {
     let department = Arc::new(Department {
       name: "Maths".to_string(),
       class_count: 30,
-      class_size: 30,
+      min_class_size: 30,
+      max_class_size: 35,
     });
     let subject = Arc::new(
       SubjectBuilder::new()
@@ -155,7 +166,8 @@ mod tests {
     let department = Arc::new(Department {
       name: "Maths".to_string(),
       class_count: 0,
-      class_size: 30,
+      min_class_size: 30,
+      max_class_size: 35,
     });
     let subject = Arc::new(
       SubjectBuilder::new()
@@ -183,12 +195,14 @@ mod tests {
     let department_one = Arc::new(Department {
       name: "Maths".to_string(),
       class_count: 0,
-      class_size: 30,
+      min_class_size: 30,
+      max_class_size: 35,
     });
     let department_two = Arc::new(Department {
       name: "Science".to_string(),
       class_count: 30,
-      class_size: 30,
+      min_class_size: 30,
+      max_class_size: 35,
     });
     let subject = Arc::new(
       SubjectBuilder::new()
@@ -217,7 +231,8 @@ mod tests {
     let department = Arc::new(Department {
       name: "Maths".to_string(),
       class_count: 10,
-      class_size: 30,
+      min_class_size: 30,
+      max_class_size: 35,
     });
     let subject = Arc::new(
       SubjectBuilder::new()
@@ -250,29 +265,15 @@ mod tests {
       .add_student_to_subject(Arc::downgrade(&student_two), Arc::downgrade(&subject))
       .unwrap();
     assert_eq!(slot.class_list.len(), 1);
-    assert_eq!(
-      slot
-        .class_list
-        .get(0)
-        .unwrap()
-        .lock()
-        .unwrap()
-        .student_list
-        .len(),
-      2
-    );
+    assert_eq!(slot.class_list.get(0).unwrap().student_list.len(), 2);
     assert!(slot
       .class_list
       .get(0)
-      .unwrap()
-      .lock()
       .unwrap()
       .contains(Arc::downgrade(&student_one)));
     assert!(slot
       .class_list
       .get(0)
-      .unwrap()
-      .lock()
       .unwrap()
       .contains(Arc::downgrade(&student_two)));
   }
@@ -282,12 +283,14 @@ mod tests {
     let department = Arc::new(Department {
       name: "Maths".to_string(),
       class_count: 10,
-      class_size: 30,
+      min_class_size: 30,
+      max_class_size: 35,
     });
     let department_full = Arc::new(Department {
       name: "Science".to_string(),
       class_count: 0,
-      class_size: 30,
+      min_class_size: 30,
+      max_class_size: 35,
     });
     let subject = Arc::new(
       SubjectBuilder::new()
@@ -325,7 +328,8 @@ mod tests {
     let department = Arc::new(Department {
       name: "Science".to_string(),
       class_count: 10,
-      class_size: 30,
+      min_class_size: 30,
+      max_class_size: 35,
     });
     let subject = Arc::new(
       SubjectBuilder::new()
