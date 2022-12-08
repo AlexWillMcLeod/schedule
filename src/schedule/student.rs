@@ -9,11 +9,12 @@ pub struct StudentBuilder {
   subject_list: Vec<Weak<Subject>>,
 }
 
+#[derive(Debug)]
 pub struct Student {
   pub first_name: String,
   pub last_name: String,
   pub id: String,
-  subject_list: Vec<Weak<Subject>>,
+  pub subject_list: Vec<Weak<Subject>>,
 }
 
 impl StudentBuilder {
@@ -103,14 +104,11 @@ mod tests {
   #[test]
   #[should_panic]
   fn create_student_only_last_name_with_subjects() {
-    let maths_department = Arc::new(
-      DepartmentBuilder::new()
-        .name("Maths Department")
-        .class_count(10)
-        .class_size(10)
-        .build()
-        .unwrap(),
-    );
+    let maths_department = Arc::new(Department {
+      name: "Maths Department".to_string(),
+      class_count: 10,
+      class_size: 10,
+    });
 
     let calculus_subject = Arc::new(
       SubjectBuilder::new()
@@ -137,14 +135,11 @@ mod tests {
 
   #[test]
   fn create_student_with_subjects() {
-    let maths_department = Arc::new(
-      DepartmentBuilder::new()
-        .name("Maths Department")
-        .class_count(10)
-        .class_size(10)
-        .build()
-        .unwrap(),
-    );
+    let maths_department = Arc::new(Department {
+      name: "Maths Department".to_string(),
+      class_count: 10,
+      class_size: 10,
+    });
 
     let calculus_subject = Arc::new(
       SubjectBuilder::new()

@@ -64,14 +64,11 @@ mod tests {
   #[test]
   #[should_panic]
   fn create_subject_missing_name() {
-    let maths_department = Arc::new(
-      DepartmentBuilder::new()
-        .name("Maths Department")
-        .class_count(10)
-        .class_size(10)
-        .build()
-        .unwrap(),
-    );
+    let maths_department = Arc::new(Department {
+      name: "Maths Department".to_string(),
+      class_size: 30,
+      class_count: 20,
+    });
 
     let subject_builder = SubjectBuilder::new().department(Arc::downgrade(&maths_department));
     let subject = subject_builder.build().unwrap();
@@ -86,14 +83,11 @@ mod tests {
 
   #[test]
   fn create_subject() {
-    let maths_department = Arc::new(
-      DepartmentBuilder::new()
-        .name("Maths Department")
-        .class_count(10)
-        .class_size(10)
-        .build()
-        .unwrap(),
-    );
+    let maths_department = Arc::new(Department {
+      name: "Maths Department".to_string(),
+      class_size: 30,
+      class_count: 20,
+    });
 
     let calculus_subject = Arc::new(
       SubjectBuilder::new()

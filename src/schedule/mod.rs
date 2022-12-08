@@ -4,7 +4,7 @@ pub mod subject;
 
 extern crate rand;
 
-pub use department::{Department, DepartmentBuilder};
+pub use department::Department;
 pub use student::{Student, StudentBuilder};
 pub use subject::{Subject, SubjectBuilder};
 
@@ -16,12 +16,15 @@ pub struct Schedule {
   student_list: Vec<Arc<Student>>,
   subject_list: Vec<Arc<Subject>>,
   department_list: Vec<Arc<Department>>,
-  timetable: Timetable,
+  pub timetable: Timetable,
 }
 
 impl Schedule {
   pub fn new() -> Self {
-    Self::default()
+    Self {
+      timetable: Timetable::new(5),
+      ..Default::default()
+    }
   }
 
   fn department_name_in_use(&self, name: impl Into<String>) -> bool {
@@ -52,15 +55,11 @@ impl Schedule {
     class_size: usize,
     class_count: usize,
   ) -> Result<()> {
-    let department_builder = DepartmentBuilder::new()
-      .name(name)
-      .class_size(class_size)
-      .class_count(class_count);
-    let department = match department_builder.build() {
-      Ok(k) => k,
-      Err(k) => return Err(k),
-    };
-    self.add_department(department)
+    self.add_department(Department {
+      name: name.into(),
+      class_size,
+      class_count,
+    })
   }
 
   fn get_department(&self, name: impl Into<String>) -> Option<Arc<Department>> {
@@ -90,7 +89,7 @@ impl Schedule {
         "Name ({}) is already in use by another subject",
         name
       )));
-    }
+    };
     self.subject_list.push(Arc::new(subject));
     Ok(())
   }
@@ -196,7 +195,12 @@ impl Schedule {
   }
 
   pub fn sort(&mut self) -> Result<()> {
-    todo!()
+    for student in &self.student_list {
+      self
+        .timetable
+        .add_student_to_timetable(Arc::downgrade(&student));
+    }
+    Ok(())
   }
 }
 
@@ -233,36 +237,31 @@ mod tests {
     assert_eq!(
       department_list,
       vec![
-        DepartmentBuilder::new()
-          .name("Maths Department")
-          .class_size(25)
-          .class_count(10)
-          .build()
-          .unwrap(),
-        DepartmentBuilder::new()
-          .name("English Department")
-          .class_size(30)
-          .class_count(10)
-          .build()
-          .unwrap(),
-        DepartmentBuilder::new()
-          .name("Science Department")
-          .class_size(30)
-          .class_count(15)
-          .build()
-          .unwrap(),
-        DepartmentBuilder::new()
-          .name("Social Science Department")
-          .class_size(30)
-          .class_count(10)
-          .build()
-          .unwrap(),
-        DepartmentBuilder::new()
-          .name("IT Department")
-          .class_size(30)
-          .class_count(20)
-          .build()
-          .unwrap(),
+        Department {
+          name: "Maths Department".to_string(),
+          class_size: 25,
+          class_count: 10
+        },
+        Department {
+          name: "English Department".to_string(),
+          class_size: 30,
+          class_count: 10
+        },
+        Department {
+          name: "Science Department".to_string(),
+          class_size: 30,
+          class_count: 15
+        },
+        Department {
+          name: "Social Science Department".to_string(),
+          class_size: 30,
+          class_count: 10
+        },
+        Department {
+          name: "IT Department".to_string(),
+          class_size: 30,
+          class_count: 20
+        }
       ]
     )
   }
@@ -289,12 +288,11 @@ mod tests {
 
     assert_eq!(
       maths_department,
-      DepartmentBuilder::new()
-        .name("Maths Department")
-        .class_size(30)
-        .class_count(5)
-        .build()
-        .unwrap()
+      Department {
+        name: "Maths Department".to_string(),
+        class_size: 30,
+        class_count: 5
+      }
     );
   }
 
@@ -322,12 +320,11 @@ mod tests {
 
     assert_eq!(
       department,
-      DepartmentBuilder::new()
-        .name("Maths Department")
-        .class_size(30)
-        .class_count(10)
-        .build()
-        .unwrap()
+      Department {
+        name: "Maths Department".to_string(),
+        class_size: 30,
+        class_count: 10
+      }
     );
   }
 
@@ -356,12 +353,11 @@ mod tests {
 
     assert_eq!(
       department,
-      DepartmentBuilder::new()
-        .name("Maths Department")
-        .class_size(30)
-        .class_count(25)
-        .build()
-        .unwrap()
+      Department {
+        name: "Maths Department".to_string(),
+        class_size: 30,
+        class_count: 25
+      }
     );
   }
 
