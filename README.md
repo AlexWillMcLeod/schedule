@@ -6,7 +6,7 @@ As of now schedule is a simple library that will take information about students
 
 Let's create a random school with 100 students, 8 subjects, 140 classrooms and 20 different departments, then sort it in place.
 
-```
+```rust
   let mut high_school = random::random_schedule(100, 8, 140, 20);
   high_school.sort();
 ```
